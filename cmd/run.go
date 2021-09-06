@@ -5,60 +5,52 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/profclems/nicr/internal/fileops"
+
 	"github.com/spf13/cobra"
 )
 
-type FileType int
-
-const (
-	Applications FileType = iota
-	Archive
-	Audio
-	Documents
-	Databases
-	Fonts
-	Other
-	Pictures
-	Videos
-)
-
-type SmartFile struct {
-	Name string
-	Path string
-	Type FileType
-}
-
 func newRunCmd(opts *CmdOptions) *cobra.Command {
-	var concurrency int
+	var exclude []string
 	cmd := &cobra.Command{
-		Use:   "run <directory>",
+		Use:   "run <src> [dest]",
 		Short: "Scans and arranges files into folders according to their file types",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dir := args[0]
+			srcDir := args[0]
+			destDir := srcDir
 
-			return runE(opts, dir)
+			if len(args) == 2 {
+				destDir = args[1]
+			}
+			return runE(opts, srcDir, destDir, exclude)
 		},
 	}
 
-	cmd.Flags().IntVarP(&concurrency, "concurrency", "c", 1, "NNumber of concurrency workers to use for the move operation")
+	cmd.Flags().StringSliceVarP(&exclude, "exclude", "c", []string{}, "Exclude specified files or directories")
 
 	return cmd
 }
 
-func runE(opts *CmdOptions, dir string) error {
-	folders := map[FileType]string{
-		Applications: "Applications",
-		Archive:      "Archive",
-		Audio:        "Audio",
-		Documents:    "Documents",
-		Databases:    "Databases",
-		Fonts:        "Fonts",
-		Other:        "Other",
-		Pictures:     "Pictures",
-		Videos:       "Videos",
+func runE(opts *CmdOptions, srcDir, destDir string, exclude []string) error {
+	filesToExclude := make(map[string]int, len(exclude))
+
+	for i, f := range exclude {
+		filesToExclude[f] = i
 	}
-	files, err := getFiles(dir)
+
+	folders := map[fileops.FileType]string{
+		fileops.Applications: "Applications",
+		fileops.Archive:      "Archive",
+		fileops.Audio:        "Audio",
+		fileops.Documents:    "Documents",
+		fileops.Databases:    "Databases",
+		fileops.Fonts:        "Fonts",
+		fileops.Other:        "Other",
+		fileops.Pictures:     "Pictures",
+		fileops.Videos:       "Videos",
+	}
+	files, err := getFiles(srcDir)
 	if err != nil {
 		return err
 	}
@@ -68,11 +60,13 @@ func runE(opts *CmdOptions, dir string) error {
 		return nil
 	}
 
-	//folders := make([]SmartFolder, 0, files.Len())
-
 	for _, file := range *files {
-		folder := filepath.Join(dir, folders[file.Type])
-		if !dirExists(folder) {
+		if _, exclude := filesToExclude[file.Name]; exclude {
+			continue
+		}
+
+		folder := filepath.Join(destDir, folders[file.Type])
+		if !fileops.DirExists(folder) {
 			err := os.MkdirAll(folder, os.ModePerm)
 			if err != nil {
 				return err
@@ -82,22 +76,15 @@ func runE(opts *CmdOptions, dir string) error {
 		newPath := filepath.Join(folder, file.Name)
 		fmt.Fprintf(opts.StdErr, "%s -> %s\n", file.Path, newPath)
 
-		err := os.Rename(file.Path, newPath)
-		if err != nil {
+		if err := fileops.Move(file.Path, newPath); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-type SmartFiles []*SmartFile
-
-func (s *SmartFiles) Len() int {
-	return len(*s)
-}
-
-func getFiles(dir string) (*SmartFiles, error) {
-	var files SmartFiles
+func getFiles(dir string) (*fileops.SmartFiles, error) {
+	var files fileops.SmartFiles
 
 	f, err := os.Open(dir)
 	if err != nil {
@@ -111,44 +98,13 @@ func getFiles(dir string) (*SmartFiles, error) {
 
 	for _, v := range rFiles {
 		if !v.IsDir() {
-			files = append(files, &SmartFile{
+			files = append(files, &fileops.SmartFile{
 				Name: v.Name(),
 				Path: filepath.Join(dir, v.Name()),
-				Type: getFileType(v.Name()),
+				Type: fileops.GetFileType(v.Name()),
 			})
 		}
 	}
 
 	return &files, nil
-}
-
-func getFileType(file string) FileType {
-	switch filepath.Ext(file) {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".cr2", ".tif", ".bmp", ".heif", ".jxr", ".psd", ".ico", ".dwg":
-		return Pictures
-
-	case ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".avi", ".wmv", ".mpg", ".flv", ".3gp":
-		return Videos
-	case ".wasm", ".dex", ".dey", ".exe", ".dmg", ".rpm", ".deb":
-		return Applications
-	case ".woff", ".woff2", ".ttf", ".otf":
-		return Fonts
-	case ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf", ".epub", ".rtf":
-		return Documents
-	case ".mid", ".mp3", ".m4a", ".ogg", ".flac", ".wav", ".amr", ".aac":
-		return Audio
-	case ".zip", ".tar", ".rar", ".gz", ".bz2", ".7z", ".xz", ".zstd", ".swf", ".iso", ".eot", ".ps", ".nes", ".crx", ".cab", ".ar", ".Z", ".lz", ".elf", ".dcm":
-		return Archive
-	case ".sqlite", ".sql":
-		return Databases
-	default:
-		return Other
-	}
-}
-
-func dirExists(dir string) bool {
-	if info, err := os.Stat(dir); err == nil || !os.IsNotExist(err) {
-		return info.IsDir()
-	}
-	return false
 }
