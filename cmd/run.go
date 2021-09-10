@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -56,7 +55,7 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude []string) error {
 	}
 
 	if files.Len() <= 0 {
-		fmt.Fprintln(opts.StdErr, "No Files found")
+		opts.Log.Println("INFO: No Files found")
 		return nil
 	}
 
@@ -74,7 +73,7 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude []string) error {
 		}
 
 		newPath := filepath.Join(folder, file.Name)
-		fmt.Fprintf(opts.StdErr, "%s -> %s\n", file.Path, newPath)
+		opts.Log.Printf("INFO: move %s --> %s\n", file.Path, newPath)
 
 		if err := fileops.Move(file.Path, newPath); err != nil {
 			return err

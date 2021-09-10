@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,8 @@ import (
 type CmdOptions struct {
 	StdErr *os.File
 	StdOut *os.File
+
+	Log *log.Logger
 }
 
 func NewRootCmd(opts *CmdOptions) *cobra.Command {
@@ -21,6 +24,7 @@ func NewRootCmd(opts *CmdOptions) *cobra.Command {
 
 	cmd.AddCommand(newRunCmd(opts))
 	cmd.AddCommand(newSetupCmd(opts))
+	cmd.AddCommand(newWatchCmd(opts))
 	cmd.AddCommand(newVersionCmd(opts))
 
 	return cmd
