@@ -24,6 +24,7 @@ func NewRootCmd(opts *CmdOptions) *cobra.Command {
 
 	cmd.AddCommand(newRunCmd(opts))
 	cmd.AddCommand(newSetupCmd(opts))
+	cmd.AddCommand(newServiceCmd(opts))
 	cmd.AddCommand(newWatchCmd(opts))
 	cmd.AddCommand(newVersionCmd(opts))
 

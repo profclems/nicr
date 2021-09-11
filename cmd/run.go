@@ -60,6 +60,10 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude []string) error {
 	}
 
 	for _, file := range *files {
+		if file.Size <= 0 || file.Type == fileops.NoOp {
+			continue
+		}
+
 		if _, exclude := filesToExclude[file.Name]; exclude {
 			continue
 		}
@@ -101,6 +105,7 @@ func getFiles(dir string) (*fileops.SmartFiles, error) {
 				Name: v.Name(),
 				Path: filepath.Join(dir, v.Name()),
 				Type: fileops.GetFileType(v.Name()),
+				Size: v.Size(),
 			})
 		}
 	}

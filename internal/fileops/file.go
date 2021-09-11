@@ -17,12 +17,14 @@ const (
 	Other
 	Pictures
 	Videos
+	NoOp // indicates that file should be exempted
 )
 
 type SmartFile struct {
 	Name string
 	Path string
 	Type FileType
+	Size int64
 }
 
 type SmartFiles []*SmartFile
@@ -49,6 +51,8 @@ func GetFileType(file string) FileType {
 		return Archive
 	case ".sqlite", ".sql":
 		return Databases
+	case ".download", ".crdownload":
+		return NoOp
 	default:
 		return Other
 	}
