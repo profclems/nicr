@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/profclems/nicr/internal/fileops"
+	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/profclems/nicr/internal/config"
+	"github.com/profclems/nicr/internal/fileops"
 )
 
 func newRunCmd(opts *CmdOptions) *cobra.Command {
@@ -22,7 +25,7 @@ func newRunCmd(opts *CmdOptions) *cobra.Command {
 			if len(args) == 2 {
 				destDir = args[1]
 			}
-			return runE(opts, srcDir, destDir, exclude)
+			return runE(opts, srcDir, destDir, exclude...)
 		},
 	}
 
@@ -31,24 +34,18 @@ func newRunCmd(opts *CmdOptions) *cobra.Command {
 	return cmd
 }
 
-func runE(opts *CmdOptions, srcDir, destDir string, exclude []string) error {
+func runE(opts *CmdOptions, srcDir, destDir string, exclude ...string) error {
 	filesToExclude := make(map[string]int, len(exclude))
 
 	for i, f := range exclude {
 		filesToExclude[f] = i
 	}
 
-	folders := map[fileops.FileType]string{
-		fileops.Applications: "Applications",
-		fileops.Archive:      "Archive",
-		fileops.Audio:        "Audio",
-		fileops.Documents:    "Documents",
-		fileops.Databases:    "Databases",
-		fileops.Fonts:        "Fonts",
-		fileops.Other:        "Other",
-		fileops.Pictures:     "Pictures",
-		fileops.Videos:       "Videos",
+	cfg, err := config.NewConfig(opts.ConfigPath)
+	if err != nil {
+		return err
 	}
+
 	files, err := getFiles(srcDir)
 	if err != nil {
 		return err
@@ -60,27 +57,37 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude []string) error {
 	}
 
 	for _, file := range *files {
-		if file.Size <= 0 || file.Type == fileops.NoOp {
+		if _, exclude := filesToExclude[file.Name]; exclude || file.Size <= 0 {
 			continue
 		}
 
-		if _, exclude := filesToExclude[file.Name]; exclude {
-			continue
-		}
-
-		folder := filepath.Join(destDir, folders[file.Type])
-		if !fileops.DirExists(folder) {
-			err := os.MkdirAll(folder, os.ModePerm)
-			if err != nil {
-				return err
+		if folder, exclude := cfg.Get(file.Ext); !exclude {
+			folder := filepath.Join(destDir, folder)
+			if !fileops.DirExists(folder) {
+				err := os.MkdirAll(folder, os.ModePerm)
+				if err != nil {
+					return err
+				}
 			}
-		}
 
-		newPath := filepath.Join(folder, file.Name)
-		opts.Log.Printf("INFO: move %s --> %s\n", file.Path, newPath)
+			newPath := filepath.Join(folder, file.Name)
+			for count := 1; ; count++ {
+				newPath := newPath
+				if fileops.FileExists(newPath) {
+					newPath = strings.TrimRight(newPath, "."+file.Ext)
+					newPath = fmt.Sprintf("%s-%d.%s", newPath, count, file.Ext)
+				}
+				if !fileops.FileExists(newPath) {
+					opts.Log.Printf("INFO: move %s --> %s\n", file.Path, newPath)
 
-		if err := fileops.Move(file.Path, newPath); err != nil {
-			return err
+					if err := fileops.Move(file.
+						Path, newPath); err != nil {
+						return err
+					}
+					break
+				}
+				continue
+			}
 		}
 	}
 	return nil
@@ -104,7 +111,7 @@ func getFiles(dir string) (*fileops.SmartFiles, error) {
 			files = append(files, &fileops.SmartFile{
 				Name: v.Name(),
 				Path: filepath.Join(dir, v.Name()),
-				Type: fileops.GetFileType(v.Name()),
+				Ext:  strings.TrimLeft(filepath.Ext(v.Name()), "."),
 				Size: v.Size(),
 			})
 		}

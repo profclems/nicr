@@ -74,6 +74,9 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 				return err
 			}
 
+			if err := runE(opts, args[0], args[0]); err != nil {
+				return err
+			}
 			status, err := service.Manage(install, "watch", args[0])
 
 			if err != nil {

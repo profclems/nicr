@@ -38,7 +38,7 @@ func watchRun(opts *CmdOptions, dir string) error {
 				}
 				opts.Log.Println("EVENT:", event)
 				if event.Op == fsnotify.Create {
-					err = runE(opts, dir, dir, nil)
+					err = runE(opts, dir, dir)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
